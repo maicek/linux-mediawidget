@@ -18,9 +18,20 @@ func main() {
 	mpris := mpris.New()
 	mpris.Start()
 
+	// ui.UpdatePopupMusicMetadata(mpris.GetCurrentMetadata())
+
 	mpris.OnMetadataChange = func(metadata gui.MusicMetadata) {
 		fmt.Printf("Now playing: %s — %s\n", metadata.Artist, metadata.Title)
-		ui.ShowPopup(metadata, 3*time.Second)
+		ui.UpdatePopupMusicMetadata(metadata)
+		ui.ShowPopup(3 * time.Second)
+	}
+
+	mpris.OnPlaybackStatusChange = func(status string) {
+		if status == "Playing" {
+			ui.ShowPopup(3 * time.Second)
+		} else {
+			ui.ShowPopup(2 * time.Second)
+		}
 	}
 
 	// wait for exit signal

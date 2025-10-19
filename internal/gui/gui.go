@@ -199,11 +199,17 @@ func (g *GUI) Run() {
 	g.app.Run(nil)
 }
 
-func (g *GUI) ShowPopup(metadata MusicMetadata, timeout time.Duration) {
-	g.renderUntil = time.Now().Add(timeout + 100*time.Millisecond)
-
+func (g *GUI) UpdatePopupMusicMetadata(metadata MusicMetadata) {
 	g.metadataElements.title.SetText(metadata.Title)
 	g.metadataElements.artist.SetText(metadata.Artist)
 	g.musicMetadata.AlbumCover = metadata.AlbumCover
 	go g.updateAlbumCover()
+}
+
+func (g *GUI) ShowPopup(timeout time.Duration) {
+	g.renderUntil = time.Now().Add(timeout + 100*time.Millisecond)
+}
+
+func (g *GUI) HidePopup() {
+	g.renderUntil = time.Now()
 }

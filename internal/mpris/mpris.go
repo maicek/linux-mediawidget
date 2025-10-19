@@ -8,8 +8,9 @@ import (
 )
 
 type Mpris struct {
-	conn             *dbus.Conn
-	OnMetadataChange func(metadata gui.MusicMetadata)
+	conn                   *dbus.Conn
+	OnMetadataChange       func(metadata gui.MusicMetadata)
+	OnPlaybackStatusChange func(status string)
 }
 
 func New() *Mpris {
@@ -79,6 +80,11 @@ func (m *Mpris) Start() *Mpris {
 						AlbumCover: albumCover,
 					})
 				}
+
+				if status, ok := changed["PlaybackStatus"]; ok {
+					fmt.Println("Playback status changed:", status.Value().(string))
+					m.OnPlaybackStatusChange(status.Value().(string))
+				}
 			}
 		}
 	}()
@@ -86,4 +92,13 @@ func (m *Mpris) Start() *Mpris {
 	m.conn = conn
 
 	return m
+}
+
+func (m *Mpris) GetCurrentMetadata() gui.MusicMetadata {
+	return gui.MusicMetadata{
+		Title:      "Unknown",
+		Artist:     "Unknown",
+		Album:      "Unknown",
+		AlbumCover: "",
+	}
 }
