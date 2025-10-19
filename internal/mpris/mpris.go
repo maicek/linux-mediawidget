@@ -4,11 +4,12 @@ import (
 	"fmt"
 
 	"github.com/godbus/dbus/v5"
+	"maicek.dev/linux-mediawidget/internal/gui"
 )
 
 type Mpris struct {
 	conn             *dbus.Conn
-	OnMetadataChange func(title string, artist string)
+	OnMetadataChange func(metadata gui.MusicMetadata)
 }
 
 func New() *Mpris {
@@ -61,7 +62,22 @@ func (m *Mpris) Start() *Mpris {
 						artist = a[0]
 					}
 
-					m.OnMetadataChange(title, artist)
+					album := "Unknown"
+					if al, ok := metadata["xesam:album"].Value().(string); ok {
+						album = al
+					}
+
+					albumCover := ""
+					if ac, ok := metadata["mpris:artUrl"].Value().(string); ok {
+						albumCover = ac
+					}
+
+					m.OnMetadataChange(gui.MusicMetadata{
+						Title:      title,
+						Artist:     artist,
+						Album:      album,
+						AlbumCover: albumCover,
+					})
 				}
 			}
 		}

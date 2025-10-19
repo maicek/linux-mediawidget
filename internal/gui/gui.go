@@ -2,16 +2,34 @@ package gui
 
 import (
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/diamondburned/gotk4-layer-shell/pkg/gtk4layershell"
 
+	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
+
+	"net/http"
 )
 
+var WindowSize = 70
+var WindowWidth = 320
+
 type MusicMetadata struct {
-	Title  string
-	Artist string
+	Title      string
+	Artist     string
+	Album      string
+	AlbumCover string
+}
+
+type MetadataRenderElements struct {
+	title      *gtk.Label
+	artist     *gtk.Label
+	albumCover *gtk.Image
+	// album  *gtk.Label
 }
 
 type GUI struct {
@@ -20,39 +38,94 @@ type GUI struct {
 	win              *gtk.ApplicationWindow
 	renderUntil      time.Time
 	musicMetadata    MusicMetadata
-	metadataElements map[string]*gtk.Label
+	metadataElements MetadataRenderElements
+}
+
+func (gui *GUI) getCoverPath() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".popupd/album-cover.png")
+}
+
+func (gui *GUI) createMetadataElements(bg *gtk.Box) {
+	fixed := gtk.NewFixed()
+	fixed.SetCanFocus(false)
+	fixed.SetCSSClasses([]string{"MediaInfo"})
+	bg.Append(fixed)
+
+	title := *gtk.NewLabel("The whole music title")
+	title.SetCSSClasses([]string{"MediaInfo__title"})
+	fixed.Put(&title, 0, 0)
+	gui.metadataElements.title = &title
+
+	artist := *gtk.NewLabel("The whole artist")
+	artist.SetCSSClasses([]string{"MediaInfo__artist"})
+	fixed.Put(&artist, 0, 20)
+	gui.metadataElements.artist = &artist
+
+	albumCover := *gtk.NewImage()
+	albumCover.SetCSSClasses([]string{"MediaInfo__album-cover"})
+	albumCover.SetPixelSize(50)
+	albumCover.SetFromFile(gui.getCoverPath())
+
+	fixed.Put(&albumCover, float64(WindowWidth-40), 0)
+
+	gui.metadataElements.albumCover = &albumCover
+}
+
+func (gui *GUI) DownloadAlbumCover() {
+	if gui.musicMetadata.AlbumCover == "" {
+		return
+	}
+
+	resp, err := http.Get(gui.musicMetadata.AlbumCover)
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		panic(err)
+	}
+
+	// Save to file at ~/.popupd/album-cover.png
+	os.WriteFile(gui.getCoverPath(), body, 0644)
+}
+
+func (gui *GUI) updateAlbumCover() {
+	gui.DownloadAlbumCover()
+	gui.metadataElements.albumCover.SetFromFile(gui.getCoverPath())
 }
 
 func New() *GUI {
 	app := gtk.NewApplication("dev.maicek.popupd", 0)
 
 	gui := &GUI{
-		app:              app,
-		metadataElements: make(map[string]*gtk.Label),
+		app: app,
 	}
+
+	home, _ := os.UserHomeDir()
+	cssPath := filepath.Join(home, ".popupd/style.css")
 
 	app.Connect("activate", func() {
 		win := gtk.NewApplicationWindow(app)
 		win.SetTitle("Popupd")
-		win.SetDefaultSize(400, 80)
+		win.SetDefaultSize(320, WindowSize)
+		win.SetDecorated(false)
+		win.SetCSSClasses([]string{"popupd-bg"})
+		win.SetOpacity(0.8)
 		win.SetResizable(false)
 		gui.win = win
 
+		display := gdk.DisplayGetDefault()
+		provider := gtk.NewCSSProvider()
+		provider.LoadFromPath(cssPath)
+		gtk.StyleContextAddProviderForDisplay(display, provider, gtk.STYLE_PROVIDER_PRIORITY_USER)
+
 		bg := gtk.NewBox(gtk.OrientationVertical, 6)
-		bg.SetMarginStart(6)
-		bg.SetMarginEnd(6)
-		bg.SetMarginTop(0)
-		bg.SetMarginBottom(0)
 		bg.SetCanFocus(false)
 
-		label := gtk.NewLabel("Title")
-		bg.Append(label)
-
-		gui.metadataElements["title"] = label
-
-		label = gtk.NewLabel("Artist")
-		bg.Append(label)
-		gui.metadataElements["artist"] = label
+		gui.createMetadataElements(bg)
 
 		win.SetChild(bg)
 
@@ -62,17 +135,18 @@ func New() *GUI {
 			gtk4layershell.SetLayer(&win.Window, gtk4layershell.LayerShellLayerTop)
 			gtk4layershell.SetExclusiveZone(&win.Window, 0)
 			gtk4layershell.SetAnchor(&win.Window, gtk4layershell.LayerShellEdgeTop, true)
-			gtk4layershell.SetMargin(&win.Window, gtk4layershell.LayerShellEdgeTop, -80)
+			gtk4layershell.SetMargin(&win.Window, gtk4layershell.LayerShellEdgeTop, -WindowSize-20)
 
 			win.SetVisible(true)
 
 		} else {
 			fmt.Println("Layer shell not supported")
+			panic("Layer shell not supported")
 		}
 	})
 
-	targetMargin := -80
-	currentMargin := -80
+	targetMargin := -WindowSize - 20
+	currentMargin := -WindowSize - 20
 
 	go func() {
 		for {
@@ -82,7 +156,7 @@ func New() *GUI {
 				} else {
 					currentMargin--
 				}
-				gtk4layershell.SetMargin(&gui.win.Window, gtk4layershell.LayerShellEdgeTop, currentMargin)
+				gtk4layershell.SetMargin(&gui.win.Window, gtk4layershell.LayerShellEdgeTop, int(currentMargin))
 			}
 
 			time.Sleep(1 * time.Millisecond)
@@ -94,7 +168,7 @@ func New() *GUI {
 			if gui.win != nil {
 				if gui.visible && time.Now().After(gui.renderUntil) {
 					gui.visible = false
-					targetMargin = -80
+					targetMargin = -WindowSize - 20
 
 					fmt.Println("Hiding window")
 				} else if !gui.visible && time.Now().Before(gui.renderUntil) {
@@ -112,24 +186,15 @@ func New() *GUI {
 	return gui
 }
 
-func (g *GUI) UpdateMusicMetadata() {
-	g.metadataElements["title"].SetText(g.musicMetadata.Title)
-	g.metadataElements["artist"].SetText(g.musicMetadata.Artist)
-}
-
 func (g *GUI) Run() {
 	g.app.Run(nil)
 }
 
-func (g *GUI) ShowPopup(title string, timeout time.Duration) {
+func (g *GUI) ShowPopup(metadata MusicMetadata, timeout time.Duration) {
 	g.renderUntil = time.Now().Add(timeout + 100*time.Millisecond)
 
-	g.musicMetadata = MusicMetadata{
-		Title:  title,
-		Artist: "",
-	}
-	g.UpdateMusicMetadata()
-
-	g.win.SetTitle(title)
-
+	g.metadataElements.title.SetText(metadata.Title)
+	g.metadataElements.artist.SetText(metadata.Artist)
+	g.musicMetadata.AlbumCover = metadata.AlbumCover
+	go g.updateAlbumCover()
 }
