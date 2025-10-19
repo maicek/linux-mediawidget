@@ -96,6 +96,13 @@ func (gui *GUI) DownloadAlbumCover() error {
 }
 
 func (gui *GUI) updateAlbumCover() {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Failed to update album cover:", r)
+			gui.metadataElements.albumCover.SetVisible(false)
+		}
+	}()
+
 	err := gui.DownloadAlbumCover()
 	if err != nil {
 		fmt.Println("Failed to update album cover:", err)
