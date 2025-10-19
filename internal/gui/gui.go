@@ -72,28 +72,37 @@ func (gui *GUI) createMetadataElements(bg *gtk.Box) {
 	gui.metadataElements.albumCover = &albumCover
 }
 
-func (gui *GUI) DownloadAlbumCover() {
+func (gui *GUI) DownloadAlbumCover() error {
 	if gui.musicMetadata.AlbumCover == "" {
-		return
+		return nil
 	}
 
 	resp, err := http.Get(gui.musicMetadata.AlbumCover)
 	if err != nil {
-		panic(err)
+		fmt.Println("Failed to download album cover:", err)
+		return err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		panic(err)
+		fmt.Println("Failed to read album cover:", err)
+		return err
 	}
 
 	// Save to file at ~/.popupd/album-cover.png
 	os.WriteFile(gui.getCoverPath(), body, 0644)
+	return nil
 }
 
 func (gui *GUI) updateAlbumCover() {
-	gui.DownloadAlbumCover()
+	err := gui.DownloadAlbumCover()
+	if err != nil {
+		fmt.Println("Failed to update album cover:", err)
+		gui.metadataElements.albumCover.SetVisible(false)
+		return
+	}
+	gui.metadataElements.albumCover.SetVisible(true)
 	gui.metadataElements.albumCover.SetFromFile(gui.getCoverPath())
 }
 
