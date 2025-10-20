@@ -6,10 +6,13 @@ Development phase 1.
 
 TODO:
 
-- Better styling
-- Better GUI Code
+- Improve GUI Code
 - Better Handler (use channels instead of polling)
-- IDK.
+- Fix mpris events handling to prevent random popup show.
+
+## Requires:
+- gtk4
+- gtk4-layer-shell
 
 Run with
 
